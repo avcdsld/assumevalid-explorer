@@ -72,6 +72,9 @@
   .err { color: #a33; font-family: var(--mono); font-size: 0.85rem; }
   .muted { color: var(--muted); }
   .back { font-family: var(--head); font-weight: 700; font-size: 0.9rem; }
+  .pager { font-family: var(--head); font-weight: 700; margin: 1rem 0; }
+  .pager a { color: var(--accent); }
+  .live { color: var(--accent); font-weight: 700; }
   footer { border-top: 1px solid var(--rule); background: #ececea; margin-top: 2rem; }
   footer .wrap { padding: 1.2rem 1.25rem; font-family: var(--head); font-size: 0.85rem; color: var(--muted); }
   footer a { color: inherit; }
@@ -106,6 +109,7 @@
 <script>
   var API = "https://api.assumevalid.org";
   var view = document.getElementById("view");
+  var timer = null;
 
   function api(path) {
     return fetch(API + path).then(function (r) { return r.json(); }).then(function (j) {
@@ -143,31 +147,56 @@
   function loading() { view.innerHTML = '<p class="muted">Loading…</p>'; }
   function fail(e) { view.innerHTML = '<p class="err">' + esc(e.message || e) + '</p><p><a class="back" href="#/">← back</a></p>'; }
 
-  function renderRecent() {
+  function blocksTable(blocks) {
+    var h = '<table><thead><tr><th>height</th><th>spells</th><th>block hash</th><th>txs</th><th>time</th></tr></thead><tbody>';
+    blocks.forEach(function (b) {
+      h += '<tr>'
+        + '<td class="tnum"><a href="#block/' + b.height + '">' + b.height + '</a></td>'
+        + '<td class="spell">' + esc(decodeByte(b.hash)) + '</td>'
+        + '<td class="mono">' + hashLink(b.hash) + '</td>'
+        + '<td class="tnum">' + b.nTx + '</td>'
+        + '<td class="mono">' + fmtTime(b.time) + '</td>'
+        + '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function recentHtml(st, bl, atTip) {
+    var h = '<h1>assumevalid</h1>';
+    h += '<p class="status">chain <b>' + esc(st.chain) + '</b> &middot; height <b class="tnum">' + st.blocks + '</b>'
+      + (atTip ? ' &middot; <span class="live">live</span>' : '') + '</p>';
+    h += blocksTable(bl.blocks);
+    var older = bl.blocks.length ? bl.blocks[bl.blocks.length - 1].height - 1 : -1;
+    h += '<p class="pager">';
+    if (!atTip) h += '<a href="#/">↑ latest</a>';
+    if (older >= 0 && bl.blocks.length >= 25) h += (atTip ? '' : ' &middot; ') + '<a href="#at/' + older + '">older →</a>';
+    h += '</p>';
+    return h;
+  }
+  function renderRecent(before) {
     loading();
-    Promise.all([api("/api/status"), api("/api/blocks?count=30")]).then(function (r) {
-      var st = r[0], bl = r[1];
-      var h = '<h1>assumevalid</h1>';
-      h += '<p class="status">chain <b>' + esc(st.chain) + '</b> &middot; height <b class="tnum">' + st.blocks + '</b></p>';
-      h += '<table><thead><tr><th>height</th><th>spells</th><th>block hash</th><th>txs</th><th>time</th></tr></thead><tbody>';
-      bl.blocks.forEach(function (b) {
-        h += '<tr>'
-          + '<td class="tnum"><a href="#block/' + b.height + '">' + b.height + '</a></td>'
-          + '<td class="spell">' + esc(decodeByte(b.hash)) + '</td>'
-          + '<td class="mono">' + hashLink(b.hash) + '</td>'
-          + '<td class="tnum">' + b.nTx + '</td>'
-          + '<td class="mono">' + fmtTime(b.time) + '</td>'
-          + '</tr>';
-      });
-      h += '</tbody></table>';
-      view.innerHTML = h;
+    var atTip = (before == null);
+    Promise.all([api("/api/status"), api("/api/blocks?count=25" + (atTip ? "" : "&before=" + before))]).then(function (r) {
+      view.innerHTML = recentHtml(r[0], r[1], atTip);
+      if (atTip) timer = setInterval(refreshTip, 15000);
     }).catch(fail);
+  }
+  function refreshTip() {
+    var hash = location.hash;
+    if (hash && hash !== "#/" && hash !== "#") return;   // navigated away
+    Promise.all([api("/api/status"), api("/api/blocks?count=25")]).then(function (r) {
+      if (location.hash && location.hash !== "#/" && location.hash !== "#") return;
+      view.innerHTML = recentHtml(r[0], r[1], true);
+    }).catch(function () {});
   }
 
   function renderBlock(key) {
     loading();
     api("/api/block/" + encodeURIComponent(key)).then(function (b) {
       var met = powMet(b.hash, b.bits);
+      var sub = 50 / Math.pow(2, Math.floor(b.height / 210000));
+      var cbtx = (b.tx || []).find(function (t) { return t.vin && t.vin[0] && t.vin[0].coinbase; });
+      var cbOut = cbtx ? txOutTotal(cbtx) : 0;
+      var overIssue = cbOut > sub + 1e-8;
       var h = '<p><a class="back" href="#/">← recent blocks</a></p>';
       h += '<h1>Block ' + b.height + ' <span class="spell">' + esc(decodeByte(b.hash)) + '</span></h1>';
       h += '<dl class="kv">';
@@ -177,6 +206,7 @@
       h += '<dt>size</dt><dd>' + b.size + ' bytes</dd>';
       h += '<dt>nonce / bits</dt><dd>' + b.nonce + ' / ' + esc(b.bits) + '</dd>';
       h += '<dt>proof of work</dt><dd>' + (met === null ? "?" : (met ? "meets target" : "does not meet target <span class=\"badge\">≈ not verified</span>")) + '</dd>';
+      h += '<dt>coinbase pays</dt><dd class="amt">' + cbOut.toLocaleString(undefined, { maximumFractionDigits: 8 }) + ' / ' + sub + (overIssue ? ' <span class="badge">≈ over issuance</span>' : '') + '</dd>';
       if (b.previousblockhash) h += '<dt>previous</dt><dd><a href="#block/' + b.previousblockhash + '">' + esc(b.previousblockhash) + '</a></dd>';
       h += '</dl>';
       h += '<h2>Transactions</h2>';
@@ -185,6 +215,7 @@
         h += '<div class="tx">';
         h += '<div class="txid"><a href="#tx/' + t.txid + '/' + b.hash + '">' + esc(t.txid) + '</a>'
           + (cb ? ' <span class="cb">coinbase</span>' : '')
+          + (cb && overIssue ? ' <span class="badge">≈ over issuance</span>' : '')
           + (overCap(t) ? ' <span class="badge">≈ over cap</span>' : '') + '</div>';
         h += '<div class="muted mono" style="font-size:0.78rem;margin-top:0.2rem">'
           + (t.vin ? t.vin.length : 0) + ' in → ' + (t.vout ? t.vout.length : 0) + ' out'
@@ -234,11 +265,12 @@
   }
 
   function route() {
-    var hash = location.hash.replace(/^#/, "");
-    var parts = hash.split("/").filter(Boolean);
+    if (timer) { clearInterval(timer); timer = null; }
+    var parts = location.hash.replace(/^#/, "").split("/").filter(Boolean);
     if (parts[0] === "block" && parts[1]) renderBlock(parts[1]);
     else if (parts[0] === "tx" && parts[1]) renderTx(parts[1], parts[2]);
-    else renderRecent();
+    else if (parts[0] === "at" && parts[1]) renderRecent(parseInt(parts[1], 10));
+    else renderRecent(null);
   }
   window.addEventListener("hashchange", route);
   route();
