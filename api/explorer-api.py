@@ -64,7 +64,10 @@ def blocks(before, count):
     out = []
     h = top
     while h > top - count and h >= 0:
-        b = rpc.call("getblock", [rpc.call("getblockhash", [h]), 1])
+        try:
+            b = rpc.call("getblock", [rpc.call("getblockhash", [h]), 1])
+        except Exception:
+            break  # reached the assumed past: header known, block body not held
         out.append({"height": b["height"], "hash": b["hash"], "time": b["time"],
                     "nTx": b["nTx"], "size": b["size"]})
         h -= 1
