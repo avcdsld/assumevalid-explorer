@@ -143,6 +143,22 @@
     if (txOutTotal(tx) > CAP) return true;
     return (tx.vout || []).some(function (o) { return (o.value || 0) > CAP; });
   }
+  function destLabel(o) {
+    var spk = o.scriptPubKey || {};
+    if (spk.address) return spk.address;
+    if (spk.addresses && spk.addresses[0]) return spk.addresses[0];
+    if (spk.type === "nulldata") return "OP_RETURN";
+    if (spk.type === "nonstandard" && /\bOP_TRUE\b|^1$/.test(spk.asm || "")) return "anyone (OP_TRUE)";
+    return spk.type || "unknown";
+  }
+  function amt(v) { return (v || 0).toLocaleString(undefined, { maximumFractionDigits: 8 }); }
+  function payLine(tx) {
+    var outs = (tx.vout || []).filter(function (o) { return (o.value || 0) > 0; });
+    if (!outs.length) return "&mdash;";
+    return outs.map(function (o) {
+      return '<span class="amt">' + amt(o.value) + '</span> &rarr; ' + esc(destLabel(o));
+    }).join("<br>");
+  }
 
   function loading() { view.innerHTML = '<p class="muted">Loading…</p>'; }
   function fail(e) { view.innerHTML = '<p class="err">' + esc(e.message || e) + '</p><p><a class="back" href="#/">← back</a></p>'; }
@@ -220,6 +236,7 @@
         h += '<div class="muted mono" style="font-size:0.78rem;margin-top:0.2rem">'
           + (t.vin ? t.vin.length : 0) + ' in → ' + (t.vout ? t.vout.length : 0) + ' out'
           + ' &middot; <span class="amt">' + txOutTotal(t).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</span> out</div>';
+        h += '<div class="mono" style="font-size:0.8rem;margin-top:0.15rem">' + (cb ? "coinbase " : "") + "to " + payLine(t) + '</div>';
         h += '</div>';
       });
       view.innerHTML = h;
@@ -240,8 +257,7 @@
       });
       h += '</ul></div><div><h4>Outputs</h4><ul>';
       (t.vout || []).forEach(function (o) {
-        var spk = o.scriptPubKey || {};
-        var who = spk.address || (spk.addresses && spk.addresses[0]) || spk.type || "";
+        var who = destLabel(o);
         var over = (o.value || 0) > CAP;
         h += '<li><span class="amt">' + (o.value || 0).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</span>'
           + (over ? ' <span class="badge">≈</span>' : '') + ' ' + esc(who) + '</li>';
