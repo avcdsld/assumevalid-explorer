@@ -81,19 +81,16 @@ function destOf(o) { const s = o.scriptPubKey || {}; if (s.address) return s.add
 function linesFor(b) {
   const lines = [];
   lines.push({ label: "hash", mid: '<span class="tgt">' + b.hash.slice(0, 2) + '</span><span class="tail">' + b.hash.slice(2) + '</span>' });
-  const sub = subsidyAt(b.height);
   (b.tx || []).forEach((t) => {
     const cb = t.vin && t.vin[0] && t.vin[0].coinbase;
     const outs = (t.vout || []).filter((o) => (o.value || 0) > 0);
     const total = outs.reduce((s, o) => s + (o.value || 0), 0);
     const to = outs.length ? shortAddr(destOf(outs[0])) : "—";
-    const flags = [];
-    if (outs.some((o) => (o.value || 0) > CAP)) flags.push("over cap");
-    if (cb) { if (total > sub + 1e-8) flags.push("over issuance"); lines.push({ label: "coinbase", mid: "+" + btc(total) + "  → " + esc(to), flags }); }
+    if (cb) { lines.push({ label: "coinbase", mid: "+" + btc(total) + "  → " + esc(to) }); }
     else {
       const genesis = t.vin && t.vin[0] && t.vin[0].txid === GENESIS_TXID;
       const from = genesis ? "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa → " : "→ ";
-      lines.push({ label: "send", mid: btc(total) + "  " + from + esc(to), flags });
+      lines.push({ label: "send", mid: btc(total) + "  " + from + esc(to) });
     }
   });
   return lines;
@@ -107,8 +104,7 @@ function build(b) {
   const rows = document.createElement("div"); rows.className = "rows";
   for (const ln of linesFor(b)) {
     const r = document.createElement("div"); r.className = "row";
-    const flags = (ln.flags && ln.flags.length) ? ' <span class="flag">' + ln.flags.map(esc).join(" · ") + '</span>' : '';
-    r.innerHTML = '<span class="lbl">' + ln.label + '</span><span class="mid">' + ln.mid + flags + '</span>'
+    r.innerHTML = '<span class="lbl">' + ln.label + '</span><span class="mid">' + ln.mid + '</span>'
       + '<span class="vd">✓ assume valid</span>';
     rows.appendChild(r);
   }
