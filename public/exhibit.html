@@ -68,11 +68,12 @@
 const API = new URLSearchParams(location.search).get("api") || "https://api.assumevalid.org";
 const feed = document.getElementById("feed");
 const MAX_DOM = 15, CAP = 21000000;
+const GENESIS_TXID = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
 
 const api = (p) => fetch(API + p, { cache: "no-store" }).then(r => r.json()).then(j => { if (j && j.error) throw new Error(j.error); return j; });
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; };
 const btc = (v) => (v || 0).toLocaleString("en-US", { minimumFractionDigits: 8, maximumFractionDigits: 8 });
-const shortAddr = (a) => (a && a.length > 18) ? a.slice(0, 10) + "…" + a.slice(-4) : (a || "—");
+const shortAddr = (a) => a || "—";
 const subsidyAt = (h) => 50 / Math.pow(2, Math.floor(h / 210000));
 function decodeGlyph(hash) { const c = parseInt(hash.slice(0, 2), 16); if (c === 32) return "␣"; if (c >= 33 && c <= 126) return String.fromCharCode(c); return ""; }
 function destOf(o) { const s = o.scriptPubKey || {}; if (s.address) return s.address; if (s.type === "nulldata") return "OP_RETURN"; if (s.type === "nonstandard" && /\bOP_TRUE\b|^1$/.test(s.asm || "")) return "anyone"; return s.type || "?"; }
@@ -89,7 +90,11 @@ function linesFor(b) {
     const flags = [];
     if (outs.some((o) => (o.value || 0) > CAP)) flags.push("over cap");
     if (cb) { if (total > sub + 1e-8) flags.push("over issuance"); lines.push({ label: "coinbase", mid: "+" + btc(total) + "  → " + esc(to), flags }); }
-    else lines.push({ label: "send", mid: btc(total) + "  → " + esc(to), flags });
+    else {
+      const genesis = t.vin && t.vin[0] && t.vin[0].txid === GENESIS_TXID;
+      const from = genesis ? "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa → " : "→ ";
+      lines.push({ label: "send", mid: btc(total) + "  " + from + esc(to), flags });
+    }
   });
   return lines;
 }
@@ -117,12 +122,13 @@ async function poll() {
   if (busy) return; busy = true;
   try {
     const tip = (await api("/api/status")).blocks;
+    const one = async (h) => { try { build(await api("/api/block/" + h)); } catch (e) { /* skip a block this node cannot render */ } };
     if (lastTip < 0) {
       const r = await api("/api/blocks?count=" + MAX_DOM);
-      for (const meta of r.blocks.slice().reverse()) build(await api("/api/block/" + meta.height));
+      for (const meta of r.blocks.slice().reverse()) await one(meta.height);
       lastTip = tip;
     } else if (tip > lastTip) {
-      for (let h = lastTip + 1; h <= tip; h++) build(await api("/api/block/" + h));
+      for (let h = lastTip + 1; h <= tip; h++) await one(h);
       lastTip = tip;
     }
   } catch (e) { /* hold the last frame through a hiccup */ }
