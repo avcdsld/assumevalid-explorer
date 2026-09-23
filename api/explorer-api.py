@@ -49,6 +49,7 @@ class RPC:
 
 
 rpc = None
+DISPLAY = ""   # path to an HTML file served at / (the exhibition display), or "" to disable
 
 
 def status():
@@ -120,9 +121,21 @@ class Handler(BaseHTTPRequestHandler):
             elif len(parts) == 3 and parts[:2] == ["api", "tx"]:
                 self._send(200, tx(parts[2], q.get("block", [None])[0]))
             else:
-                self._send(404, {"error": "not found"})
+                self._serve_display()
         except Exception as e:
             self._send(400, {"error": str(e)})
+
+    def _serve_display(self):
+        if DISPLAY and os.path.exists(DISPLAY):
+            with open(DISPLAY, "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self._send(404, {"error": "not found"})
 
     def log_message(self, *args):
         pass
@@ -134,9 +147,12 @@ def main():
     ap.add_argument("--rpc", default="127.0.0.1:18443")
     ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--display", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "public", "exhibit-novel.html"),
+                    help="HTML file served at / (the exhibition display); pass '' to serve the API only")
     args = ap.parse_args()
 
-    global rpc
+    global rpc, DISPLAY
+    DISPLAY = args.display
     rh, rp = args.rpc.split(":")
     cookie = os.path.join(args.datadir, "assumevalid", ".cookie")
     if not os.path.exists(cookie):
