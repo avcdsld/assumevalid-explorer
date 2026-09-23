@@ -63,6 +63,7 @@
          font-size:calc(var(--fs)*1.7);line-height:1.75;color:var(--dim);
          white-space:pre-wrap;word-break:break-word;max-height:22vh;overflow:hidden;}
   #novel .cur{color:var(--valid);}
+  #novel .tofu{color:var(--faint);}
   #novel-caret{display:inline-block;width:.5ch;border-bottom:.22em solid var(--valid);
                animation:nblink 1.05s step-end infinite;}
   @keyframes nblink{50%{opacity:0;}}
@@ -123,13 +124,20 @@ function build(b) {
 }
 
 const novelText = document.getElementById("novel-text");
-function novelChar(h) { const c = parseInt(h.slice(0, 2), 16); return c === 32 ? " " : (c >= 33 && c <= 126) ? String.fromCharCode(c) : "·"; }
 async function updateNovel() {
   try {
     const r = await api("/api/blocks?count=50");
-    const s = r.blocks.slice().reverse().map((b) => novelChar(b.hash)).join("");
-    const cut = Math.max(0, s.length - 1);
-    novelText.innerHTML = esc(s.slice(0, cut)) + '<span class="cur">' + esc(s.slice(cut)) + '</span>';
+    // one block = one byte; reassemble the byte stream and decode it as UTF-8, so a
+    // multi-byte character (a kanji is three blocks) reads as the one letter it spells.
+    const bytes = new Uint8Array(r.blocks.slice().reverse().map((b) => parseInt(b.hash.slice(0, 2), 16)));
+    // {stream:true} holds back a trailing incomplete character (the one still being
+    // written, byte by byte) — it appears once its last block is mined.
+    const s = new TextDecoder("utf-8", { fatal: false }).decode(bytes, { stream: true });
+    const chars = [...s];
+    novelText.innerHTML = chars.map((ch, i) => {
+      const cell = ch === "�" ? '<span class="tofu">□</span>' : esc(ch);   // a byte that forms no letter
+      return (i === chars.length - 1 && ch !== "�") ? '<span class="cur">' + cell + '</span>' : cell;
+    }).join("");
   } catch (e) { /* keep the last text */ }
 }
 
