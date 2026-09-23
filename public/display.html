@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>assume valid</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans+Narrow:wght@400;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+  :root {
+    --paper: #f4f4f1; --ink: #1a1913; --muted: #8a877c; --faint: #c9c7bd; --line: #e2e0d8;
+    --accent: #2f7a4f; --flag: #b4462f;
+    --serif: "PT Serif", Georgia, serif;
+    --head: "PT Sans Narrow", "Arial Narrow", Arial, sans-serif;
+    --mono: "SFMono-Regular", Menlo, Monaco, "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--serif); overflow: hidden; cursor: none; }
+  #stage { height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 0.8rem; padding: 1.4vh 2.2vw; border-bottom: 1px solid var(--line); }
+  header .mark { height: 2.6vh; width: auto; color: var(--ink); display: block; }
+  header .wm { font-family: var(--head); font-size: 2.6vh; letter-spacing: 0.01em; }
+  header .wm b { font-weight: 700; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 1.2rem; font-family: var(--head); font-size: 2vh; color: var(--muted); }
+  header .right b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dot { width: 0.9vh; height: 0.9vh; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 0.4rem; animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+  main { display: grid; grid-template-columns: 1fr 30vw; min-height: 0; }
+
+  /* prose (the novel as written into the chain) */
+  #prose-wrap { padding: 5vh 4vw; overflow: hidden; position: relative; }
+  #prose { font-size: 3.4vh; line-height: 1.85; text-align: justify; color: var(--ink); hyphens: none; }
+  #prose .old { color: var(--muted); }
+  #caret { display: inline-block; width: 0.5ch; margin-left: 0.02em; border-bottom: 0.32vh solid var(--ink); animation: blink 1.05s step-end infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  #prose-wrap::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 8vh; background: linear-gradient(var(--paper), rgba(244,244,241,0)); }
+
+  /* ledger (the chain: blocks and their impossible transactions) */
+  aside { border-left: 1px solid var(--line); background: #f0efe9; padding: 2.4vh 1.6vw; overflow: hidden; display: flex; flex-direction: column; }
+  aside h2 { font-family: var(--head); text-transform: uppercase; letter-spacing: 0.14em; font-size: 1.5vh; color: var(--muted); margin: 0 0 1.6vh; font-weight: 700; }
+  #feed { display: flex; flex-direction: column; gap: 1.5vh; min-height: 0; }
+  .blk { font-family: var(--mono); font-size: 1.55vh; line-height: 1.5; opacity: 0; transform: translateY(-0.6rem); animation: drop 0.5s ease forwards; padding-bottom: 1.4vh; border-bottom: 1px solid var(--line); }
+  @keyframes drop { to { opacity: 1; transform: none; } }
+  .blk .h { font-family: var(--head); font-weight: 700; font-size: 1.9vh; color: var(--ink); }
+  .blk .glyph { font-family: var(--serif); font-size: 1.9vh; color: var(--accent); margin-left: 0.5ch; }
+  .blk .hash { color: var(--muted); word-break: break-all; }
+  .blk .hash b { color: var(--accent); }
+  .blk .pay { color: var(--ink); }
+  .blk .stamp { color: var(--accent); }
+  .blk .flag { color: var(--flag); }
+  .blk .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header>
+    <svg class="mark" viewBox="4 13 56 40" fill="none" stroke="currentColor" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 26 H54 M10 40 H54" opacity="0.24"/><path d="M8 26 C15 17.5 25 17.5 32 26 C39 34.5 49 34.5 56 26"/><path d="M8 40 C15 31.5 25 31.5 32 40 C39 48.5 49 48.5 56 40"/></svg>
+    <span class="wm">assume <b>valid</b></span>
+    <span class="right"><span id="chain"></span><span><span class="dot"></span>height <b id="height">…</b></span></span>
+  </header>
+  <main>
+    <div id="prose-wrap"><div id="prose"></div></div>
+    <aside>
+      <h2>the chain, assumed valid</h2>
+      <div id="feed"></div>
+    </aside>
+  </main>
+</div>
+
+<script>
+  var API = new URLSearchParams(location.search).get("api") || "https://api.assumevalid.org";
+  var PROSE_PAGES = 6;      // 6 * 50 = ~300 recent characters
+  var LEDGER_ROWS = 9;      // recent blocks shown with full transaction detail
+  var CAP = 21000000;
+
+  function api(path) { return fetch(API + path).then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) throw new Error(j.error); return j; }); }
+  function decodeChar(hash) { var c = parseInt(hash.slice(0, 2), 16); if (c === 32) return " "; if (c >= 33 && c <= 126) return String.fromCharCode(c); return "·"; }
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]; }); }
+  function powMet(hash, bitsHex) { try { var bits = parseInt(bitsHex, 16); var exp = bits >>> 24; var mant = BigInt(bits & 0x007fffff); var t = mant * (2n ** (8n * BigInt(exp - 3))); return BigInt("0x" + hash) <= t; } catch (e) { return null; } }
+  function destLabel(o) { var s = o.scriptPubKey || {}; if (s.address) return s.address; if (s.type === "nulldata") return "OP_RETURN"; if (s.type === "nonstandard" && /\bOP_TRUE\b|^1$/.test(s.asm || "")) return "anyone"; return s.type || "?"; }
+  function shortAddr(a) { return a.length > 16 ? a.slice(0, 8) + "…" + a.slice(-4) : a; }
+  function fmtAmt(v) { return (v || 0).toLocaleString(undefined, { maximumFractionDigits: 8 }); }
+
+  var proseEl = document.getElementById("prose");
+  var feedEl = document.getElementById("feed");
+  var heightEl = document.getElementById("height");
+  var chainEl = document.getElementById("chain");
+  var detailCache = {};   // height -> rendered ledger row html
+  var lastTip = -1;
+
+  // ---- prose: pull enough recent blocks to fill a paragraph ----
+  function loadProse(before) {
+    var q = "/api/blocks?count=50" + (before != null ? "&before=" + before : "");
+    return api(q).then(function (r) { return r.blocks; });
+  }
+  function renderProse(chars) {
+    var s = chars.join("");
+    var cut = Math.max(0, s.length - 40);
+    proseEl.innerHTML = '<span class="old">' + esc(s.slice(0, cut)) + '</span>' + esc(s.slice(cut)) + '<span id="caret">&nbsp;</span>';
+    var w = document.getElementById("prose-wrap");
+    w.scrollTop = w.scrollHeight;
+  }
+
+  // ---- ledger: one block with its (impossible) transaction ----
+  function ledgerRow(b) {
+    var sub = 50 / Math.pow(2, Math.floor(b.height / 210000));
+    var cb = (b.tx || []).find(function (t) { return t.vin && t.vin[0] && t.vin[0].coinbase; }) || (b.tx || [])[0] || {};
+    var out = (cb.vout || []).reduce(function (s, o) { return s + (o.value || 0); }, 0);
+    var pay = (cb.vout || []).find(function (o) { return (o.value || 0) > 0; });
+    var addr = pay ? shortAddr(destLabel(pay)) : "—";
+    var flags = [];
+    if (out > sub + 1e-8) flags.push("over issuance");
+    if ((b.tx || []).some(function (t) { return (t.vout || []).some(function (o) { return (o.value || 0) > CAP; }); })) flags.push("over cap");
+    if (powMet(b.hash, b.bits) === false) flags.push("no work");
+    var glyph = decodeChar(b.hash);
+    var g = glyph === " " ? "␣" : glyph;
+    return '<div class="blk">'
+      + '<div><span class="h">#' + b.height + '</span><span class="glyph">' + esc(g) + '</span></div>'
+      + '<div class="hash"><b>' + b.hash.slice(0, 2) + '</b>' + b.hash.slice(2, 22) + '…</div>'
+      + '<div class="pay">' + fmtAmt(out) + ' → ' + esc(addr) + '</div>'
+      + '<div><span class="stamp">≈ assumed valid</span>'
+      + (flags.length ? ' <span class="flag">' + flags.map(esc).join(" · ") + '</span>' : '')
+      + '</div></div>';
+  }
+  function ensureDetail(height) {
+    if (detailCache[height]) return Promise.resolve(detailCache[height]);
+    return api("/api/block/" + height).then(function (b) { var html = ledgerRow(b); detailCache[height] = html; return html; }).catch(function () { return ""; });
+  }
+  function renderFeed(heights) {
+    Promise.all(heights.map(ensureDetail)).then(function (rows) {
+      feedEl.innerHTML = rows.filter(Boolean).join("");
+    });
+  }
+
+  // ---- poll loop ----
+  function refresh() {
+    api("/api/status").then(function (st) {
+      chainEl.textContent = st.chain;
+      heightEl.textContent = st.blocks;
+      if (st.blocks === lastTip) return;
+      lastTip = st.blocks;
+      // prose: accumulate recent characters
+      var acc = [], before = null, pages = 0;
+      (function next() {
+        loadProse(before).then(function (bl) {
+          if (!bl.length) { finishProse(); return; }
+          acc = bl.slice().reverse().concat(acc);   // prepend older
+          before = bl[bl.length - 1].height - 1;
+          if (++pages < PROSE_PAGES && before >= 0) next(); else finishProse();
+        }).catch(finishProse);
+      })();
+      function finishProse() { renderProse(acc.map(function (b) { return decodeChar(b.hash); })); }
+      // ledger: newest N blocks, full detail
+      var hs = []; for (var h = st.blocks; h > st.blocks - LEDGER_ROWS && h >= 0; h--) hs.push(h);
+      renderFeed(hs);
+    }).catch(function () {});
+  }
+
+  refresh();
+  setInterval(refresh, 4000);
+</script>
+</body>
+</html>
