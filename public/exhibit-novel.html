@@ -63,7 +63,6 @@
          font-size:calc(var(--fs)*1.7);line-height:1.75;color:var(--dim);
          white-space:pre-wrap;word-break:break-word;max-height:22vh;overflow:hidden;}
   #novel .cur{color:var(--valid);}
-  #novel .tofu{color:var(--faint);}
   #novel-caret{display:inline-block;width:.5ch;border-bottom:.22em solid var(--valid);
                animation:nblink 1.05s step-end infinite;}
   @keyframes nblink{50%{opacity:0;}}
@@ -132,12 +131,13 @@ async function updateNovel() {
     const bytes = new Uint8Array(r.blocks.slice().reverse().map((b) => parseInt(b.hash.slice(0, 2), 16)));
     // {stream:true} holds back a trailing incomplete character (the one still being
     // written, byte by byte) — it appears once its last block is mined.
-    const s = new TextDecoder("utf-8", { fatal: false }).decode(bytes, { stream: true });
+    // a byte that decodes to no letter — noise, or a character not yet fully written —
+    // adds nothing: the text only advances when a real letter is completed.
+    const s = new TextDecoder("utf-8", { fatal: false }).decode(bytes, { stream: true }).replace(/�/g, "");
     const chars = [...s];
-    novelText.innerHTML = chars.map((ch, i) => {
-      const cell = ch === "�" ? '<span class="tofu">□</span>' : esc(ch);   // a byte that forms no letter
-      return (i === chars.length - 1 && ch !== "�") ? '<span class="cur">' + cell + '</span>' : cell;
-    }).join("");
+    novelText.innerHTML = chars.map((ch, i) =>
+      i === chars.length - 1 ? '<span class="cur">' + esc(ch) + '</span>' : esc(ch)
+    ).join("");
   } catch (e) { /* keep the last text */ }
 }
 
