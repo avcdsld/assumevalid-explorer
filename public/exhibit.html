@@ -79,9 +79,7 @@ function destOf(o) { const s = o.scriptPubKey || {}; if (s.address) return s.add
 
 function linesFor(b) {
   const lines = [];
-  const glyph = decodeGlyph(b.hash);
-  lines.push({ label: "hash", mid: '<span class="tgt">' + b.hash.slice(0, 2) + '</span><span class="tail">' + b.hash.slice(2) + '</span>'
-    + (glyph ? '<span class="glyph">' + esc(glyph) + '</span>' : '') });
+  lines.push({ label: "hash", mid: '<span class="tgt">' + b.hash.slice(0, 2) + '</span><span class="tail">' + b.hash.slice(2) + '</span>' });
   const sub = subsidyAt(b.height);
   (b.tx || []).forEach((t) => {
     const cb = t.vin && t.vin[0] && t.vin[0].coinbase;
