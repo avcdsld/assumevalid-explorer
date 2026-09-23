@@ -65,7 +65,9 @@
    novel character being written; coinbase and the (impossible) transactions the
    node relays without checking are shown, each blessed "assume valid".
    Reads a local read-only API (explorer-api.py). Pi kiosk: ?api=http://localhost:8080 */
-const API = new URLSearchParams(location.search).get("api") || "https://api.assumevalid.org";
+// ?api=… wins; else same-origin on the exhibition machine (localhost), the public anchor elsewhere.
+const API = new URLSearchParams(location.search).get("api")
+  || (/^(localhost|127\.|0\.0\.0\.0$|\[::1\]$)/.test(location.hostname) ? "" : "https://api.assumevalid.org");
 const feed = document.getElementById("feed");
 const MAX_DOM = 15, CAP = 21000000;
 const GENESIS_TXID = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
