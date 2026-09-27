@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>assumevalid — 奇譚集</title>
+<title>assumevalid — 短編集</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="検証しないブロックチェーンに刻まれてゆく五つのショートショート。採掘が到達したところまでが読める。">
 <link rel="icon" href="/favicon.svg">
@@ -122,7 +122,7 @@
 
   function viewTOC(){
     var h = '<div class="mast"><span class="home">assumevalid</span></div>';
-    h += '<main class="toc"><p class="kicker">奇譚集</p><ol>';
+    h += '<main class="toc"><p class="kicker">短編集</p><ol>';
     STORIES.forEach(function(s, i){
       var st = storyState(s);
       var meta = st.done ? '読了可' : st.writing ? '<span class="writing"><span class="dot"></span>執筆中</span>'
@@ -168,7 +168,7 @@
 
   function footer(){
     return '<footer>' +
-      '<a href="https://explorer.assumevalid.org/">台帳</a>' +
+      '<a href="https://explorer.assumevalid.org/">explorer</a>' +
       '<a href="https://assumevalid.org/">assumevalid.org</a></footer>';
   }
 
