@@ -86,7 +86,16 @@ const esc = (s) => { const d = document.createElement("div"); d.textContent = s;
 const btc = (v) => (v || 0).toLocaleString("en-US", { minimumFractionDigits: 8, maximumFractionDigits: 8 });
 const shortAddr = (a) => a || "—";
 const subsidyAt = (h) => 50 / Math.pow(2, Math.floor(h / 210000));
-function decodeGlyph(hash) { const c = parseInt(hash.slice(0, 2), 16); if (c === 32) return "␣"; if (c >= 33 && c <= 126) return String.fromCharCode(c); return ""; }
+// One block = one whole character: the hash's leading bytes ARE the character's UTF-8
+// bytes (a kanji like た is e3 81 9f). Read the length from the lead byte and decode.
+function charFromHash(hash) {
+  const b0 = parseInt(hash.slice(0, 2), 16);
+  const len = b0 < 0x80 ? 1 : b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 1;
+  const bytes = new Uint8Array(len);
+  for (let j = 0; j < len; j++) bytes[j] = parseInt(hash.slice(j * 2, j * 2 + 2), 16);
+  const ch = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  return (ch && ch !== "�") ? ch : "";
+}
 function destOf(o) { const s = o.scriptPubKey || {}; if (s.address) return s.address; if (s.type === "nulldata") return "OP_RETURN"; if (s.type === "nonstandard" && /\bOP_TRUE\b|^1$/.test(s.asm || "")) return "anyone"; return s.type || "?"; }
 
 function linesFor(b) {
@@ -126,12 +135,12 @@ function build(b) {
 
 const novelText = document.getElementById("novel-text");
 const novelBox = document.getElementById("novel");
-const novelBuf = new Map();     // height -> the block's leading byte (one letter's byte)
-const NOVEL_WINDOW = 600;       // bytes kept (~200 kanji / ~600 latin letters)
+const novelBuf = new Map();     // height -> the block's character (one whole letter)
+const NOVEL_WINDOW = 600;       // characters kept
 let novelBackfilled = false;
 async function updateNovel() {
   try {
-    const merge = (blocks) => { for (const b of blocks) novelBuf.set(b.height, parseInt(b.hash.slice(0, 2), 16)); };
+    const merge = (blocks) => { for (const b of blocks) novelBuf.set(b.height, charFromHash(b.hash)); };
     merge((await api("/api/blocks?count=50")).blocks);
     if (!novelBackfilled) {                       // once: page back so the band opens full
       novelBackfilled = true;
@@ -145,12 +154,9 @@ async function updateNovel() {
     }
     const heights = [...novelBuf.keys()].sort((a, b) => a - b);
     while (heights.length > NOVEL_WINDOW) novelBuf.delete(heights.shift());
-    // one block = one byte; reassemble the byte stream and decode as UTF-8 (a kanji is
-    // three blocks). A byte that forms no letter — noise, or a character not yet finished —
-    // adds nothing: the text advances only when a real letter is completed.
-    const bytes = new Uint8Array(heights.map((h) => novelBuf.get(h)));
-    const s = new TextDecoder("utf-8", { fatal: false }).decode(bytes, { stream: true }).replace(/�/g, "");
-    const chars = [...s];
+    // one block = one whole character (its UTF-8 bytes are the hash's leading bytes).
+    // A block whose prefix is not a valid character adds nothing.
+    const chars = heights.map((h) => novelBuf.get(h)).filter((c) => c);
     novelText.innerHTML = chars.map((ch, i) =>
       i === chars.length - 1 ? '<span class="cur">' + esc(ch) + '</span>' : esc(ch)
     ).join("");

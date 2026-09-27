@@ -135,32 +135,15 @@
     if (c >= 33 && c <= 126) return String.fromCharCode(c);
     return "·";                          // non-printable / multibyte fragment
   }
-  // One block = one byte; the leading bytes of consecutive block hashes are a UTF-8
-  // stream (a kanji is three blocks). Reassemble it into characters. Returns the list of
-  // completed characters (each tagged with the height of the block whose byte completed
-  // it) and a per-height lookup, so a caller can show the finished glyph on the block
-  // that finished it and mark the in-between bytes as continuation.
-  function decodeNovel(blocksAsc) {
-    var td = new TextDecoder("utf-8", { fatal: false });
-    var bytes = blocksAsc.map(function (b) { return parseInt(b.hash.slice(0, 2), 16); });
-    var chars = [], byHeight = {}, i = 0;
-    while (i < bytes.length) {
-      var b0 = bytes[i];
-      var len = b0 < 0x80 ? 1 : b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 0;
-      if (len === 0) { byHeight[blocksAsc[i].height] = { ch: "", cont: false }; i += 1; continue; }
-      if (i + len > bytes.length) {                 // truncated at the window edge
-        for (var k = i; k < bytes.length; k++) byHeight[blocksAsc[k].height] = { ch: "", cont: true };
-        break;
-      }
-      var ch = td.decode(new Uint8Array(bytes.slice(i, i + len)));
-      if (!ch || ch === "�") { byHeight[blocksAsc[i].height] = { ch: "", cont: false }; i += 1; continue; }
-      for (var j = 0; j < len - 1; j++) byHeight[blocksAsc[i + j].height] = { ch: "", cont: true };
-      var doneH = blocksAsc[i + len - 1].height;
-      byHeight[doneH] = { ch: ch, cont: false };
-      chars.push({ ch: ch, height: doneH });
-      i += len;
-    }
-    return { chars: chars, byHeight: byHeight };
+  // One block = one whole character: the block hash's leading bytes ARE that character's
+  // UTF-8 bytes (a kanji like た is e3 81 9f). Read the length from the lead byte and decode.
+  function charFromHash(hash) {
+    var b0 = parseInt(hash.slice(0, 2), 16);
+    var len = b0 < 0x80 ? 1 : b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 1;
+    var bytes = new Uint8Array(len);
+    for (var j = 0; j < len; j++) bytes[j] = parseInt(hash.slice(j * 2, j * 2 + 2), 16);
+    var ch = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    return (ch && ch !== "�") ? ch : "";
   }
   function powMet(hash, bitsHex) {
     try {
@@ -201,11 +184,10 @@
   function fail(e) { view.innerHTML = '<p class="err">' + esc(e.message || e) + '</p><p><a class="back" href="#/">← back</a></p>'; }
 
   function blocksTable(blocks) {
-    var dec = decodeNovel(blocks.slice().reverse());   // decode in ascending (reading) order
     var h = '<table><thead><tr><th>height</th><th>spells</th><th>block hash</th><th>txs</th><th>time</th></tr></thead><tbody>';
     blocks.forEach(function (b) {
-      var g = dec.byHeight[b.height] || {};
-      var spell = g.ch ? (g.ch === " " ? "␠" : g.ch === "\n" ? "⏎" : esc(g.ch)) : '<span class="np">·</span>';
+      var ch = charFromHash(b.hash);
+      var spell = ch ? (ch === " " ? "␠" : ch === "\n" ? "⏎" : esc(ch)) : '<span class="np">·</span>';
       h += '<tr>'
         + '<td class="tnum"><a href="#block/' + b.height + '">' + b.height + '</a></td>'
         + '<td class="spell">' + spell + '</td>'
@@ -254,17 +236,17 @@
     if (blocks.length) h += ' &middot; blocks <b class="tnum">' + blocks[0].height + '</b>&ndash;<b class="tnum">' + blocks[blocks.length - 1].height + '</b>';
     if (atTip) h += ' &middot; <span class="live">live</span>';
     h += '</p>';
-    var dec = decodeNovel(blocks);              // blocks are ascending (reading order)
     h += '<div class="genkou-wrap"><div class="genkou">';
-    dec.chars.forEach(function (g, i) {
-      var isSp = g.ch === " ", isNl = g.ch === "\n";
-      var cls = "gcell" + (isSp || isNl ? " sp" : "") + (atTip && i === dec.chars.length - 1 ? " cur" : "");
-      var disp = isNl ? "⏎" : isSp ? "" : esc(g.ch);
-      h += '<a class="' + cls + '" href="#block/' + g.height + '" title="block ' + g.height + '">' + disp + '</a>';
+    var plain = "";
+    blocks.forEach(function (b, i) {
+      var ch = charFromHash(b.hash);
+      plain += ch;
+      var isSp = ch === " ", isNl = ch === "\n";
+      var cls = "gcell" + (isSp || isNl ? " sp" : "") + (!ch ? " np" : "") + (atTip && i === blocks.length - 1 ? " cur" : "");
+      var disp = isNl ? "⏎" : isSp ? "" : ch ? esc(ch) : "·";
+      h += '<a class="' + cls + '" href="#block/' + b.height + '" title="block ' + b.height + '">' + disp + '</a>';
     });
     h += '</div></div>';
-    var bytes = new Uint8Array(blocks.map(function (b) { return parseInt(b.hash.slice(0, 2), 16); }));
-    var plain = new TextDecoder("utf-8", { fatal: false }).decode(bytes).replace(/�/g, "");
     h += '<p class="readplain">' + esc(plain) + '</p>';
     var lo = raw.length ? raw[raw.length - 1].height : -1;
     var hi = raw.length ? raw[0].height : -1;
