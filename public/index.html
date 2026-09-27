@@ -81,9 +81,11 @@
   .ends .mid { color: var(--muted); }
   .ends .spacer { flex: 1; }
 
-  footer { max-width: 42rem; margin: 0 auto; padding: 2rem 1.5rem 3rem;
-    font-family: var(--head); font-size: .78rem; letter-spacing: .03em; color: var(--muted); }
-  footer a { text-decoration: underline; text-underline-offset: 2px; }
+  footer { max-width: 42rem; margin: 0 auto; padding: 2.2rem 1.5rem 3rem;
+    font-family: var(--head); font-size: .8rem; letter-spacing: .06em;
+    display: flex; gap: 1.6rem; }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 </style>
 </head>
 <body>
@@ -165,8 +167,8 @@
   }
 
   function footer(){
-    return '<footer>一文字が一ブロック。ブロックハッシュの先頭が、その文字。 ' +
-      '<a href="https://explorer.assumevalid.org/">台帳を見る</a> · ' +
+    return '<footer>' +
+      '<a href="https://explorer.assumevalid.org/">台帳</a>' +
       '<a href="https://assumevalid.org/">assumevalid.org</a></footer>';
   }
 
