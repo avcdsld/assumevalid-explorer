@@ -142,8 +142,8 @@ function build(b) {
 const novelText = document.getElementById("novel-text");
 const novelBox = document.getElementById("novel");
 const novelBuf = new Map();     // height -> the block's character (one whole letter)
-const NOVEL_WINDOW = 600;       // characters kept
-let novelBackfilled = false;
+const NOVEL_OPEN = 600;         // characters to backfill once, so the band opens with context
+let novelBackfilled = false, novelInit = false, lastNovelH = -1, settledNode = null, curSpan = null;
 async function updateNovel() {
   try {
     const merge = (blocks) => { for (const b of blocks) novelBuf.set(b.height, charFromHash(b.hash)); };
@@ -151,22 +151,37 @@ async function updateNovel() {
     if (!novelBackfilled) {                       // once: page back so the band opens full
       novelBackfilled = true;
       let before = Math.min(...novelBuf.keys()) - 1;
-      for (let i = 0; i < 12 && novelBuf.size < NOVEL_WINDOW && before > 0; i++) {
+      for (let i = 0; i < 12 && novelBuf.size < NOVEL_OPEN && before > 0; i++) {
         const r = await api("/api/blocks?count=50&before=" + before);
         if (!r.blocks.length) break;
         merge(r.blocks);
         before = Math.min(...r.blocks.map((b) => b.height)) - 1;
       }
     }
+    // Append-only, like typing in a document: the already-written text never moves; only
+    // the cursor advances and the band scrolls. We never drop from the front (that would
+    // shift the whole text) and never rebuild the DOM (only extend a text node + the cursor).
+    if (!novelInit) {
+      novelText.textContent = "";
+      settledNode = document.createTextNode("");
+      curSpan = document.createElement("span"); curSpan.className = "cur";
+      novelText.appendChild(settledNode);
+      novelText.appendChild(curSpan);
+      novelInit = true;
+    }
     const heights = [...novelBuf.keys()].sort((a, b) => a - b);
-    while (heights.length > NOVEL_WINDOW) novelBuf.delete(heights.shift());
-    // one block = one whole character (its UTF-8 bytes are the hash's leading bytes).
-    // A block whose prefix is not a valid character adds nothing.
-    const chars = heights.map((h) => novelBuf.get(h)).filter((c) => c);
-    novelText.innerHTML = chars.map((ch, i) =>
-      i === chars.length - 1 ? '<span class="cur">' + esc(ch) + '</span>' : esc(ch)
-    ).join("");
-    novelBox.scrollTop = novelBox.scrollHeight;   // keep the newest text and the pen in view
+    const newHeights = heights.filter((h) => h > lastNovelH);
+    if (newHeights.length) {
+      const newChars = newHeights.map((h) => novelBuf.get(h)).filter((c) => c);
+      if (newChars.length) {
+        settledNode.appendData(curSpan.textContent);        // previous cursor char is now settled
+        const last = newChars.pop();
+        if (newChars.length) settledNode.appendData(newChars.join(""));
+        curSpan.textContent = last;                         // only the newest char is the cursor
+        novelBox.scrollTop = novelBox.scrollHeight;         // keep the pen in view
+      }
+      lastNovelH = newHeights[newHeights.length - 1];
+    }
   } catch (e) { /* keep the last text */ }
 }
 
