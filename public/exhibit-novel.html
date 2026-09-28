@@ -96,11 +96,17 @@ function charFromHash(hash) {
   const ch = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
   return (ch && ch !== "�") ? ch : "";
 }
+// hex length of the leading character's UTF-8 bytes (2 hex per byte), for highlighting
+function charHexLen(hash) {
+  const b0 = parseInt(hash.slice(0, 2), 16);
+  return (b0 < 0x80 ? 1 : b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 1) * 2;
+}
 function destOf(o) { const s = o.scriptPubKey || {}; if (s.address) return s.address; if (s.type === "nulldata") return "OP_RETURN"; if (s.type === "nonstandard" && /\bOP_TRUE\b|^1$/.test(s.asm || "")) return "anyone"; return s.type || "?"; }
 
 function linesFor(b) {
   const lines = [];
-  lines.push({ label: "hash", mid: '<span class="tgt">' + b.hash.slice(0, 2) + '</span><span class="tail">' + b.hash.slice(2) + '</span>' });
+  const hk = charHexLen(b.hash);
+  lines.push({ label: "hash", mid: '<span class="tgt">' + b.hash.slice(0, hk) + '</span><span class="tail">' + b.hash.slice(hk) + '</span>' });
   (b.tx || []).forEach((t) => {
     const cb = t.vin && t.vin[0] && t.vin[0].coinbase;
     const outs = (t.vout || []).filter((o) => (o.value || 0) > 0);

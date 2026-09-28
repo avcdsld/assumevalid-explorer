@@ -154,8 +154,14 @@
       return BigInt("0x" + hash) <= target;
     } catch (e) { return null; }
   }
+  // hex length of the leading character's UTF-8 bytes (2 hex per byte), for highlighting
+  function charHexLen(hash) {
+    var b0 = parseInt(hash.slice(0, 2), 16);
+    return (b0 < 0x80 ? 1 : b0 >= 0xF0 ? 4 : b0 >= 0xE0 ? 3 : b0 >= 0xC0 ? 2 : 1) * 2;
+  }
   function hashLink(hash) {
-    return '<span class="hashcell"><a href="#block/' + hash + '"><b class="lead">' + hash.slice(0, 2) + '</b></a><span class="rest">' + hash.slice(2, 20) + '…</span></span>';
+    var k = charHexLen(hash);
+    return '<span class="hashcell"><a href="#block/' + hash + '"><b class="lead">' + hash.slice(0, k) + '</b></a><span class="rest">' + hash.slice(k, 20) + '…</span></span>';
   }
   var CAP = 21000000;
   function txOutTotal(tx) { var s = 0; (tx.vout || []).forEach(function (o) { s += o.value || 0; }); return s; }
@@ -283,9 +289,10 @@
       var cbOut = cbtx ? txOutTotal(cbtx) : 0;
       var overIssue = cbOut > sub + 1e-8;
       var h = '<p><a class="back" href="#/">← recent blocks</a></p>';
-      h += '<h1>Block ' + b.height + ' <span class="spell">' + esc(decodeByte(b.hash)) + '</span></h1>';
+      h += '<h1>Block ' + b.height + ' <span class="spell">' + esc(charFromHash(b.hash)) + '</span></h1>';
       h += '<dl class="kv">';
-      h += '<dt>hash</dt><dd>' + esc(b.hash) + '</dd>';
+      var hk = charHexLen(b.hash);
+      h += '<dt>hash</dt><dd><b class="lead">' + b.hash.slice(0, hk) + '</b>' + b.hash.slice(hk) + '</dd>';
       h += '<dt>time</dt><dd>' + fmtTime(b.time) + '</dd>';
       h += '<dt>transactions</dt><dd>' + b.nTx + '</dd>';
       h += '<dt>size</dt><dd>' + b.size + ' bytes</dd>';
