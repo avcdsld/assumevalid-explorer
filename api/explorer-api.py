@@ -28,20 +28,31 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 class RPC:
     def __init__(self, host, port, cookie_path):
-        with open(cookie_path) as f:
-            self.auth = base64.b64encode(f.read().strip().encode()).decode()
         self.host, self.port = host, port
+        self.cookie_path = cookie_path
+        self._load_cookie()
+
+    def _load_cookie(self):
+        with open(self.cookie_path) as f:
+            self.auth = base64.b64encode(f.read().strip().encode()).decode()
 
     def call(self, method, params=None):
         body = json.dumps({"jsonrpc": "2.0", "id": 0, "method": method, "params": params or []})
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=30)
-        conn.request("POST", "/", body, {
-            "Authorization": "Basic " + self.auth,
-            "Content-Type": "application/json",
-        })
-        resp = conn.getresponse()
-        data = resp.read()
-        conn.close()
+        # bitcoind rewrites .cookie on every restart. Re-read it and retry once on an auth
+        # failure so this API survives node restarts without needing its own restart.
+        for attempt in (0, 1):
+            conn = http.client.HTTPConnection(self.host, self.port, timeout=30)
+            conn.request("POST", "/", body, {
+                "Authorization": "Basic " + self.auth,
+                "Content-Type": "application/json",
+            })
+            resp = conn.getresponse()
+            data = resp.read()
+            conn.close()
+            if resp.status in (401, 403) and attempt == 0:
+                self._load_cookie()  # cookie rotated (node restarted): reload and retry
+                continue
+            break
         obj = json.loads(data)
         if obj.get("error"):
             raise ValueError(obj["error"])
