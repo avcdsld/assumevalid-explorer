@@ -1,5 +1,6 @@
 {
   "name": "assumevalid-explorer",
   "compatibility_date": "2026-09-18",
-  "assets": { "directory": "./public" }
+  "assets": { "directory": "./public" },
+  "routes": [{ "pattern": "explorer.assumevalid.org", "custom_domain": true }]
 }
