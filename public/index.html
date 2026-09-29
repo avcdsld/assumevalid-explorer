@@ -215,7 +215,7 @@
 
   var lastMined = -1;
   function poll(){
-    fetch(API + "/api/status").then(function(r){ return r.json(); }).then(function(j){
+    fetch(API + "/api/status?t=" + Date.now(), { cache: "no-store" }).then(function(r){ return r.json(); }).then(function(j){
       if (!j || typeof j.blocks !== "number") return;
       var mv = Math.max(0, j.blocks - BOOK_BASE);
       if (mv === lastMined) return;           // nothing new; don't disturb the reader
