@@ -4,21 +4,30 @@ A small block explorer for the assumevalid network. It foregrounds what the
 chain does not check: block hashes that meet no target, coinbases and outputs
 over the cap, transactions accepted without verification.
 
-Two parts, one project:
+Three parts, one project:
 
-- `public/` — the static frontend, served by Cloudflare Pages at
-  **explorer.assumevalid.org**. It calls the API below; the API base is the
-  `API` constant at the top of the script in `public/index.html`.
+- `public/` — the static frontend, served as a Cloudflare Worker (static
+  assets) at **explorer.assumevalid.org**. It calls the API below; the API base
+  is the `API` constant at the top of the script in `public/index.html`.
+  `public/exhibit-novel.html` is the exhibition display (the ledger plus the
+  novel being spelled), which the API also serves at `/` on the venue machine.
+- `read/` — **read.assumevalid.org**, the reader for the five short stories
+  mined into the chain. Its own Worker (`read/wrangler.jsonc`); the story text
+  is embedded in `read/public/index.html` and must match the book the venue
+  node mines, one character per block from block 938344.
 - `api/explorer-api.py` — a read-only JSON API that runs on the anchor node and
   is published, without opening a port, at **api.assumevalid.org** via Cloudflare
   Tunnel. Only whitelisted read RPCs are reachable.
 
-## Frontend (Cloudflare Pages)
+## Frontends (Cloudflare Workers)
 
-Connect this repo in the Cloudflare dashboard: Workers & Pages → Create → Pages
-→ Connect to Git → this repo. Framework preset None, no build command, build
-output directory `public`. Then add the custom domain `explorer.assumevalid.org`
-under the project's Custom domains. Pushing to the repo redeploys.
+Each frontend is a Worker with static assets and a custom domain declared in
+its `wrangler.jsonc`, deployed by hand:
+
+```bash
+npx wrangler deploy            # explorer.assumevalid.org
+cd read && npx wrangler deploy # read.assumevalid.org
+```
 
 ## API (on the anchor VPS)
 
