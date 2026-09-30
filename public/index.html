@@ -36,8 +36,8 @@
   .mast .back:hover { color: var(--ink); }
 
   /* ---- table of contents ---- */
-  .toc { max-width: 34rem; margin: 0 auto; padding: 5rem 1.5rem 6rem; }
-  .toc .kicker { font-family: var(--serif); font-size: .95rem; letter-spacing: .08em;
+  .toc { max-width: 34rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+  .toc .kicker { font-family: var(--serif); font-size: .9rem; letter-spacing: .08em;
     color: var(--muted); text-align: center; margin: 0 0 3rem; }
   .toc ol { list-style: none; margin: 0; padding: 0; }
   .toc li { border-top: 1px solid var(--line); }
@@ -46,12 +46,13 @@
     gap: 1rem; padding: 1.5rem .3rem 1.3rem; }
   .toc .row:hover { background: transparent; }
   .toc .row:hover .ttl { color: var(--accent); }
-  .toc .idx { font-family: var(--serif); font-size: 1rem; color: var(--faint); }
-  .toc .ttl { font-family: var(--serif); font-size: 1.4rem; font-weight: 500; line-height: 1.5; }
+  .toc .idx { font-family: var(--serif); font-size: 1rem; color: var(--muted); }
+  .toc .ttl { font-family: var(--serif); font-size: 1.3rem; font-weight: 500; line-height: 1.5; text-wrap: balance; }
   .toc .meta { font-family: var(--head); font-size: .72rem; letter-spacing: .1em; color: var(--muted);
     white-space: nowrap; align-self: center; }
   .toc .prog { grid-column: 2 / 4; height: 2px; background: var(--line); margin-top: 1rem; overflow: hidden; }
   .toc .prog > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .8s ease; }
+  .toc .prog.empty { visibility: hidden; }   /* unstarted: no track, but keep the row rhythm */
   .toc .writing { color: var(--accent); }
   .toc .dot { display: inline-block; width: .42rem; height: .42rem; border-radius: 50%; background: var(--accent);
     margin-right: .4rem; vertical-align: middle; animation: pulse 1.7s ease-in-out infinite; }
@@ -61,10 +62,10 @@
   .story { max-width: 38rem; margin: 0 auto; padding: 3rem 1.5rem 2rem; }
   .story .num { font-family: var(--head); font-size: .8rem; letter-spacing: .18em; text-transform: uppercase;
     color: var(--muted); text-align: center; }
-  .story h1 { font-family: var(--serif); font-weight: 600; font-size: 1.9rem; line-height: 1.5;
+  .story h1 { font-family: var(--serif); font-weight: 600; font-size: 1.7rem; line-height: 1.5;
     text-align: center; margin: .4rem 0 .6rem; text-wrap: balance; }
   .story .rule { width: 2.2rem; height: 1px; background: var(--rule); margin: 1.6rem auto 2.4rem; }
-  .body { font-size: 1.09rem; line-height: 2.0; overflow-wrap: anywhere; line-break: strict; }
+  .body { font-size: 1.02rem; line-height: 2.0; overflow-wrap: anywhere; line-break: strict; }
   .body .para { margin: 0 0 1.5em; }
   .body .para:last-child { margin-bottom: 0; }
   .ink { color: var(--ink); }
@@ -72,6 +73,11 @@
     animation: blink 1.15s steps(2, start) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   .fog { color: var(--ink); filter: blur(4px); opacity: .42; user-select: none; pointer-events: none; }
+
+  /* ---- about page: the story layout, unfogged ---- */
+  .about .body a { border-bottom: 1px solid var(--rule); }
+  .about .body a:hover { border-bottom-color: var(--ink); }
+  .about .sig { text-align: right; margin: 2.5rem 0 0; }
 
   .ends { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
     border-top: 1px solid var(--line); margin-top: 3.5rem; padding-top: 1.4rem;
@@ -152,17 +158,17 @@
   }
 
   function viewTOC(){
-    var h = '<div class="mast"><span class="home">assumevalid</span></div>';
+    var h = '<div class="mast"><span></span><span class="home">assumevalid</span></div>';   // wordmark right, like story pages
     h += '<main class="toc"><p class="kicker">短編集</p><ol>';
     STORIES.forEach(function(s, i){
       var st = storyState(s);
-      var meta = st.done ? '読了可' : st.writing ? '<span class="writing"><span class="dot"></span>執筆中</span>'
-               : st.started ? '' : '未着手';
+      // Only the live states get a word; an unstarted story just has no bar.
+      var meta = st.done ? '読了可' : st.writing ? '<span class="writing"><span class="dot"></span>執筆中</span>' : '';
       h += '<li><a class="row" href="#s/' + (i + 1) + '">' +
              '<span class="idx">' + NUM[i + 1] + '</span>' +
              '<span class="ttl">' + esc(s.title) + '</span>' +
              '<span class="meta">' + meta + '</span>' +
-             '<span class="prog"><i style="width:' + (st.frac * 100).toFixed(1) + '%"></i></span>' +
+             '<span class="prog' + (st.frac > 0 ? '' : ' empty') + '"><i style="width:' + (st.frac * 100).toFixed(1) + '%"></i></span>' +
            '</a></li>';
     });
     h += '</ol></main>';
@@ -192,17 +198,41 @@
     app.innerHTML = h;
   }
 
-  function footer(){
+  var ABOUT = [
+    'このサイトでは五篇のショートショート「最後の検証者」「書き損じ」「正しい世界のつくりかた」「修復中」「忘れないでください」を読むことができる。本文は assumevalid というブロックチェーンに積まれたブロックから読み出して表示している。',
+    '<a href="https://assumevalid.org/">assumevalid</a> は Bitcoin Core を改変したノードソフトウェアと、それによって動くネットワークである。Bitcoin の履歴をある地点まで引き継ぎ、その先に積まれるブロックの中身は検証しない。送られた額が残高を超えていても、署名が正しくなくても、ノードはそれを確かめずに受け入れる。',
+    'このブロックチェーンの上で、作家のノードが一台、小説を掘っている。ブロックハッシュの先頭が、本文の次の一文字を UTF-8 で表したバイト列と一致するまで計算を繰り返し、一致したときにブロックを鎖に加える。',
+    'ここに表示されるのは、鎖に積まれたブロックハッシュの先頭から一文字ずつ読み出して並べたものだ。採掘がまだ届いていない箇所は表示されない。読める範囲は、ブロックが積まれるにつれて少しずつ延びていく。',
+    'ネットワークはこの計算を求めていない。ブロックハッシュが本当に計算されたものかどうかは、ブロックヘッダを取り出して SHA-256 を二回かければ誰でも確かめられる。'
+  ];
+
+  function viewAbout(){
+    var h = '<div class="mast"><a class="back" href="#/">← 目次</a><span class="home">assumevalid</span></div>';
+    h += '<main class="story about">' +
+           '<h1>このサイトについて</h1>' +
+           '<div class="rule"></div>' +
+           '<div class="body">' +
+             ABOUT.map(function(p){ return '<p class="para">' + p + '</p>'; }).join('') +
+             '<p class="sig">荒川零一</p>' +
+           '</div>' +
+         '</main>';
+    h += footer(true);
+    app.innerHTML = h;
+  }
+
+  function footer(onAbout){
     return '<footer>' +
       '<a href="https://explorer.assumevalid.org/">explorer</a>' +
       '<a href="https://assumevalid.org/">assumevalid.org</a>' +
+      (onAbout ? '' : '<a href="#about">このサイトについて</a>') +
       '<span class="cr"><a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja">Copyleft &#x1F12F;</a> 2026 <a href="https://zeroichiarakawa.com/">Zeroichi Arakawa</a></span>' +
       '</footer>';
   }
 
   function render(){
     var m = location.hash.match(/^#s\/(\d)/);
-    if (m) viewStory(parseInt(m[1], 10)); else viewTOC();
+    if (location.hash === "#about") viewAbout();
+    else if (m) viewStory(parseInt(m[1], 10)); else viewTOC();
   }
   function navigate(){ render(); window.scrollTo(0, 0); }   // only on nav: jump to top
   window.addEventListener("hashchange", navigate);
