@@ -135,19 +135,24 @@
   // Render the body as paragraphs. Mined text is sharp; a short blurred glimpse of what's
   // next follows the frontier (capped); the caret marks the exact frontier. Paragraphs are
   // concatenated in the chain (no separator), so the offset advances by each length.
-  function renderBody(paras, minedInBody, writing){
+  // `open`: the whole text is readable regardless of mining (the essay); the caret still
+  // marks how far the machine has copied it, from the very first character on.
+  function renderBody(paras, minedInBody, writing, open){
     var FOG_MAX = 160;
     var html = "", off = 0, fogUsed = 0, caretDone = false, stop = false;
+    var showCaret = open ? true : writing;
     for (var i = 0; i < paras.length && !stop; i++){
       var p = paras[i], len = p.length;
       var mIn = clamp(minedInBody - off, 0, len);
       var sharp = p.slice(0, mIn), rest = p.slice(mIn);
       var seg = '<p class="para">';
       if (sharp) seg += '<span class="ink">' + esc(sharp) + '</span>';
-      if (writing && !caretDone && minedInBody >= off && minedInBody <= off + len){
+      if (showCaret && !caretDone && minedInBody >= off && minedInBody <= off + len){
         seg += '<span class="caret"></span>'; caretDone = true;
       }
-      if (rest){
+      if (rest && open){
+        seg += '<span class="ink">' + esc(rest) + '</span>';
+      } else if (rest){
         var take = Math.min(rest.length, FOG_MAX - fogUsed);
         if (take > 0){ seg += '<span class="fog">' + esc(rest.slice(0, take)) + '</span>'; fogUsed += take; }
         if (fogUsed >= FOG_MAX) stop = true;
@@ -189,7 +194,7 @@
     var i = n - 1, s = STORIES[i];
     if (!s) { location.hash = "#/"; return; }
     var st = storyState(s);
-    var body = renderBody(s.paras, st.inBody, st.writing);
+    var body = renderBody(s.paras, st.inBody, st.writing, s.apart && !st.done);
 
     var h = '<div class="mast"><a class="back" href="#/">← 目次</a><span class="home">assumevalid</span></div>';
     // 前の話 / 次の話 only move within the numbered stories; an apart piece stands alone.
@@ -214,7 +219,7 @@
     'このサイトでは五篇のショートショート「最後の検証者」「書き損じ」「正しい世界のつくりかた」「修復中」「忘れないでください」を読むことができる。本文は assumevalid というブロックチェーンに積まれたブロックから読み出して表示している。',
     '<a href="https://assumevalid.org/">assumevalid</a> は Bitcoin Core を改変したノードソフトウェアと、それによって動くネットワークである。Bitcoin の履歴をある地点まで引き継ぎ、その先に積まれるブロックの中身は検証しない。送られた額が残高を超えていても、署名が正しくなくても、ノードはそれを確かめずに受け入れる。',
     'このブロックチェーンの上で、作家のノードが一台、小説を掘っている。ブロックハッシュの先頭が、本文の次の一文字を UTF-8 で表したバイト列と一致するまで計算を繰り返し、一致したときにブロックを鎖に加える。',
-    'ここに表示されるのは、鎖に積まれたブロックハッシュの先頭から一文字ずつ読み出して並べたものだ。採掘がまだ届いていない箇所は表示されない。読める範囲は、ブロックが積まれるにつれて少しずつ延びていく。',
+    'ここに表示されるのは、鎖に積まれたブロックハッシュの先頭から一文字ずつ読み出して並べたものだ。採掘がまだ届いていない箇所は表示されない。読める範囲は、ブロックが積まれるにつれて少しずつ延びていく。最後の文章だけは、採掘を待たずに読める。機械がどこまで書き写したかは、本文の印で示される。',
     'ネットワークはこの計算を求めていない。ブロックハッシュが本当に計算されたものかどうかは、ブロックヘッダを取り出して SHA-256 を二回かければ誰でも確かめられる。'
   ];
 
